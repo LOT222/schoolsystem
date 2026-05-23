@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Information System</title>
+    
+    <!-- Fonts: Kanit -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Kanit', sans-serif; background-color: #f8fafc; }
+        .hidden-view { display: none !important; }
+        /* Loader CSS */
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(4px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Loader -->
+    <div id="loader" class="loader-overlay hidden-view">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center gap-2 cursor-pointer" onclick="switchView('landing')">
+                    <i data-lucide="school" class="text-blue-600"></i>
+                    <span class="font-semibold text-xl tracking-tight text-blue-900">Smart SIS</span>
+                </div>
+                <div class="flex items-center gap-4" id="nav-menu">
+                    <!-- จะถูก Render ด้วย JS ตามสิทธิ์ -->
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 1. Landing Page (Overview Stats) -->
+    <div id="view-landing" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">ระบบบริหารจัดการสารสนเทศโรงเรียน</h1>
+            <p class="text-gray-500">ข้อมูลครบถ้วน วิเคราะห์แม่นยำ เพื่อการตัดสินใจที่ดีกว่า</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                <div class="p-4 bg-blue-50 text-blue-600 rounded-xl"><i data-lucide="users" class="w-8 h-8"></i></div>
+                <div>
+                    <p class="text-sm text-gray-500 font-medium">นักเรียนทั้งหมด</p>
+                    <h3 class="text-2xl font-bold text-gray-900" id="stat-students">-</h3>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                <div class="p-4 bg-purple-50 text-purple-600 rounded-xl"><i data-lucide="graduation-cap" class="w-8 h-8"></i></div>
+                <div>
+                    <p class="text-sm text-gray-500 font-medium">บุคลากรครู</p>
+                    <h3 class="text-2xl font-bold text-gray-900" id="stat-teachers">-</h3>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+                <div class="p-4 bg-green-50 text-green-600 rounded-xl"><i data-lucide="book-open" class="w-8 h-8"></i></div>
+                <div>
+                    <p class="text-sm text-gray-500 font-medium">แผนการเรียน</p>
+                    <h3 class="text-2xl font-bold text-gray-900">4</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-10">
+            <h3 class="font-semibold text-lg mb-4">สัดส่วนนักเรียนตามระดับชั้น (ม.1 - ม.6)</h3>
+            <div class="w-full max-w-2xl mx-auto">
+                <canvas id="gradeChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="text-center" id="landing-login-btn">
+            <button onclick="switchView('login')" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full font-medium transition shadow-lg shadow-blue-200">
+                เข้าสู่ระบบ
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Login Page -->
+    <div id="view-login" class="hidden-view max-w-md mx-auto px-4 py-20">
+        <div class="bg-white p-8 rounded-3xl shadow-xl shadow-gray-100 border border-gray-50">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="lock" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">เข้าสู่ระบบ</h2>
+            </div>
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้ใช้งาน</label>
+                    <input type="text" id="username" required class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
+                    <input type="password" id="password" required class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition mt-6">
+                    ยืนยันการเข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. Student Management View -->
+    <div id="view-students" class="hidden-view max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">ระบบข้อมูลนักเรียน</h2>
+            <div class="flex gap-2">
+                <button onclick="exportExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Export Excel</button>
+                <button onclick="window.print()" class="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"><i data-lucide="printer" class="w-4 h-4"></i> พิมพ์ / PDF</button>
+            </div>
+        </div>
+
+        <!-- Form เพิ่มข้อมูล (Admin Only) -->
+        <div id="student-form-section" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+            <h3 class="font-semibold text-lg mb-4">เพิ่ม/แก้ไข ข้อมูล</h3>
+            <form id="studentForm" onsubmit="saveStudent(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input type="hidden" id="stu-id">
+                <input type="text" id="stu-code" placeholder="เลขประจำตัว" required class="px-4 py-2 border rounded-lg w-full">
+                <input type="text" id="stu-name" placeholder="ชื่อ-สกุล" required class="px-4 py-2 border rounded-lg w-full">
+                <select id="stu-grade" required class="px-4 py-2 border rounded-lg w-full">
+                    <option value="" disabled selected>เลือกระดับชั้น</option>
+                    <option value="ม.1">ม.1</option> <option value="ม.2">ม.2</option> <option value="ม.3">ม.3</option>
+                    <option value="ม.4">ม.4</option> <option value="ม.5">ม.5</option> <option value="ม.6">ม.6</option>
+                </select>
+                <input type="text" id="stu-room" placeholder="ห้อง (เช่น 4/1)" class="px-4 py-2 border rounded-lg w-full">
+                <input type="text" id="stu-plan" placeholder="แผนการเรียน" class="px-4 py-2 border rounded-lg w-full">
+                <input type="text" id="stu-phone" placeholder="เบอร์โทร" class="px-4 py-2 border rounded-lg w-full">
+                <input type="text" id="stu-parent" placeholder="ชื่อผู้ปกครอง" class="px-4 py-2 border rounded-lg w-full">
+                
+                <div class="md:col-span-2">
+                    <label class="text-sm text-gray-500">อัปโหลดรูปโปรไฟล์ (จะถูกบีบอัดอัตโนมัติ)</label>
+                    <input type="file" id="stu-image" accept="image/*" class="w-full text-sm mt-1">
+                </div>
+                
+                <div class="md:col-span-3 flex justify-end gap-2 mt-2">
+                    <button type="button" onclick="document.getElementById('studentForm').reset()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">ล้างค่า</button>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">บันทึกข้อมูล</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left" id="studentTable">
+                    <thead class="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                            <th class="px-6 py-4 font-medium text-gray-500 text-sm">รูป</th>
+                            <th class="px-6 py-4 font-medium text-gray-500 text-sm">เลขประจำตัว</th>
+                            <th class="px-6 py-4 font-medium text-gray-500 text-sm">ชื่อ-สกุล</th>
+                            <th class="px-6 py-4 font-medium text-gray-500 text-sm">ชั้น/ห้อง</th>
+                            <th class="px-6 py-4 font-medium text-gray-500 text-sm">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="student-list" class="divide-y divide-gray-100">
+                        <!-- Render from JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // 1. ตั้งค่า Supabase (ใช้ชื่อตัวแปร dbClient ตาม Requirement)
+        const S_URL = 'https://mcxlsdefvnuxsukxbslw.supabase.co';
+        const S_KEY = 'sb_publishable_jEzGLerY_Nf5ro0HvJGw2Q_QyVbZGgt';
+        const dbClient = window.supabase.createClient(S_URL, S_KEY);
+
+        // State Management
+        let currentUser = null;
+        let gradeChartInstance = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            loadPublicDashboard();
+        });
+
+        // ----------------- UI / UX -----------------
+        function showLoader() { document.getElementById('loader').classList.remove('hidden-view'); }
+        function hideLoader() { document.getElementById('loader').classList.add('hidden-view'); }
+
+        function switchView(viewId) {
+            const views = ['view-landing', 'view-login', 'view-students'];
+            views.forEach(v => document.getElementById(v).classList.add('hidden-view'));
+            document.getElementById(`view-${viewId}`).classList.remove('hidden-view');
+            
+            if(viewId === 'students') loadStudents();
+            renderNavbar();
+        }
+
+        function renderNavbar() {
+            const nav = document.getElementById('nav-menu');
+            if(!currentUser) {
+                nav.innerHTML = `<button onclick="switchView('login')" class="text-blue-600 font-medium hover:text-blue-800">เข้าสู่ระบบ</button>`;
+                document.getElementById('landing-login-btn').style.display = 'block';
+            } else {
+                document.getElementById('landing-login-btn').style.display = 'none';
+                let menu = `<span class="text-sm text-gray-500 mr-4">สวัสดี, ${currentUser.username} (${currentUser.role})</span>`;
+                
+                if(currentUser.role === 'admin' || currentUser.role === 'teacher') {
+                    menu += `<button onclick="switchView('students')" class="text-gray-700 hover:text-blue-600 font-medium mr-4">ข้อมูลนักเรียน</button>`;
+                }
+                menu += `<button onclick="handleLogout()" class="text-red-500 font-medium hover:text-red-700">ออกจากระบบ</button>`;
+                nav.innerHTML = menu;
+            }
+        }
+
+        // ----------------- Dashboard (Chart.js) -----------------
+        async function loadPublicDashboard() {
+            showLoader();
+            try {
+                const { data: stdData } = await dbClient.from('students').select('grade_level');
+                const { count: teacherCount } = await dbClient.from('teachers').select('*', { count: 'exact', head: true });
+                
+                document.getElementById('stat-students').innerText = stdData ? stdData.length : 0;
+                document.getElementById('stat-teachers').innerText = teacherCount || 0;
+
+                // เตรียมข้อมูลกราฟ
+                const gradeCounts = {'ม.1':0, 'ม.2':0, 'ม.3':0, 'ม.4':0, 'ม.5':0, 'ม.6':0};
+                if(stdData) {
+                    stdData.forEach(s => { if(gradeCounts[s.grade_level] !== undefined) gradeCounts[s.grade_level]++; });
+                }
+
+                const ctx = document.getElementById('gradeChart').getContext('2d');
+                if(gradeChartInstance) gradeChartInstance.destroy();
+                
+                gradeChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(gradeCounts),
+                        datasets: [{
+                            label: 'จำนวนนักเรียน (คน)',
+                            data: Object.values(gradeCounts),
+                            backgroundColor: '#3b82f6',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: { responsive: true, plugins: { legend: { display: false } } }
+                });
+            } catch (err) {
+                console.error(err);
+            }
+            hideLoader();
+        }
+
+        // ----------------- Auth -----------------
+        async function handleLogin(e) {
+            e.preventDefault();
+            showLoader();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            
+            const { data, error } = await dbClient.from('users').select('*').eq('username', u).eq('password', p).single();
+            
+            hideLoader();
+            if(data) {
+                currentUser = data;
+                document.getElementById('loginForm').reset();
+                if(data.role === 'admin' || data.role === 'teacher') switchView('students');
+                else switchView('landing'); // ถ้านักเรียนให้ดูหน้าแรกก่อน (สามารถเพิ่ม View Profile การ์ดได้ตามหลัก SPA)
+            } else {
+                alert('ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            switchView('landing');
+        }
+
+        // ----------------- Image Compression -----------------
+        async function compressImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const maxWidth = 500; 
+                        const scaleSize = maxWidth / img.width;
+                        canvas.width = maxWidth;
+                        canvas.height = img.height * scaleSize;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((blob) => {
+                            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                        }, 'image/jpeg', 0.6); // บีบอัดคุณภาพ 60%
+                    };
+                };
+            });
+        }
+
+        // ----------------- Student CRUD -----------------
+        async function loadStudents() {
+            showLoader();
+            const { data, error } = await dbClient.from('students').select('*').order('created_at', { ascending: false });
+            hideLoader();
+            
+            if(error) return alert('เกิดข้อผิดพลาดในการดึงข้อมูล');
+            
+            const tbody = document.getElementById('student-list');
+            tbody.innerHTML = '';
+            
+            // เช็คสิทธิ์การแก้ไข
+            const canEdit = currentUser?.role === 'admin';
+            if(!canEdit) document.getElementById('student-form-section').style.display = 'none';
+            else document.getElementById('student-form-section').style.display = 'block';
+
+            data.forEach(s => {
+                const imgSrc = s.profile_url || 'https://via.placeholder.com/150?text=No+Image';
+                // Error handling ถ้ารูปโหลดไม่ได้ -> onerror
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4">
+                            <img src="${imgSrc}" class="w-10 h-10 rounded-full object-cover border" onerror="this.onerror=null; this.src='https://via.placeholder.com/150?text=Error'; this.alt='โหลดรูปไม่สำเร็จ';" alt="profile">
+                        </td>
+                        <td class="px-6 py-4">${s.student_code}</td>
+                        <td class="px-6 py-4 font-medium text-blue-600">${s.fullname}</td>
+                        <td class="px-6 py-4">${s.grade_level} ${s.room || ''}</td>
+                        <td class="px-6 py-4">
+                            ${canEdit ? `<button onclick="deleteStudent('${s.id}')" class="text-red-500 text-sm font-medium hover:underline">ลบ</button>` : '-'}
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        async function saveStudent(e) {
+            e.preventDefault();
+            showLoader();
+            
+            const code = document.getElementById('stu-code').value;
+            const fileInput = document.getElementById('stu-image');
+            let uploadedUrl = null;
+
+            // บีบอัดและอัปโหลดรูปภาพถ้ามีการเลือกไฟล์
+            if(fileInput.files.length > 0) {
+                const compressedFile = await compressImage(fileInput.files[0]);
+                const filePath = `profiles/${Date.now()}_${compressedFile.name}`;
+                const { error: uploadErr } = await dbClient.storage.from('school_files').upload(filePath, compressedFile);
+                if(!uploadErr) {
+                    const { data } = dbClient.storage.from('school_files').getPublicUrl(filePath);
+                    uploadedUrl = data.publicUrl;
+                }
+            }
+
+            const payload = {
+                student_code: code,
+                fullname: document.getElementById('stu-name').value,
+                grade_level: document.getElementById('stu-grade').value,
+                room: document.getElementById('stu-room').value,
+                study_plan: document.getElementById('stu-plan').value,
+                phone: document.getElementById('stu-phone').value,
+                parent_name: document.getElementById('stu-parent').value,
+            };
+            if(uploadedUrl) payload.profile_url = uploadedUrl;
+
+            // บันทึกแบบ Upsert (เพิ่ม/แก้ไข) แทนที่จะโหลดหน้าใหม่
+            const { error } = await dbClient.from('students').upsert([payload], { onConflict: 'student_code' });
+            
+            hideLoader();
+            if(error) alert('บันทึกไม่สำเร็จ: ' + error.message);
+            else {
+                document.getElementById('studentForm').reset();
+                loadStudents();
+                loadPublicDashboard(); // อัปเดตกราฟหน้าแรกเงียบๆ
+            }
+        }
+
+        async function deleteStudent(id) {
+            if(!confirm('ต้องการลบข้อมูลนี้ใช่หรือไม่?')) return;
+            showLoader();
+            await dbClient.from('students').delete().eq('id', id);
+            hideLoader();
+            loadStudents();
+        }
+
+        // ----------------- Export Excel -----------------
+        function exportExcel() {
+            const table = document.getElementById("studentTable");
+            const wb = XLSX.utils.table_to_book(table, {sheet: "นักเรียน"});
+            XLSX.writeFile(wb, "Student_List.xlsx");
+        }
+    </script>
+</body>
+</html>
